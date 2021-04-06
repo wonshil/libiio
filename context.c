@@ -294,6 +294,9 @@ int iio_context_init(struct iio_context *ctx)
 			return -ENOMEM;
 	}
 
+	ctx->log_level = LOG_LEVEL;
+	ctx->max_level_stderr = Warning_L;
+
 	return 0;
 }
 

@@ -142,6 +142,9 @@ struct iio_context {
 	char **attrs;
 	char **values;
 	unsigned int nb_attrs;
+
+	unsigned int log_level;
+	unsigned int max_level_stderr;
 };
 
 struct iio_channel {

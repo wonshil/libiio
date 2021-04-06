@@ -19,6 +19,7 @@
 #ifndef DEBUG_H
 #define DEBUG_H
 
+#include "iio.h"
 #include "iio-config.h"
 
 #include <stdio.h>
@@ -99,5 +100,36 @@
 #else
 #define IIO_ERROR(...) do { } while (0)
 #endif
+
+#if defined(__MINGW32__)
+#   define __iio_printf __attribute__((__format__(ms_printf, 3, 4)))
+#elif defined(__GNUC__)
+#   define __iio_printf __attribute__((__format__(printf, 3, 4)))
+#else
+#   define __iio_printf
+#endif
+
+void __iio_printf iio_ctx_printf(struct iio_context *ctx, unsigned int level,
+				 const char *fmt, ...);
+
+#define ctx_err(ctx, fmt, ...) iio_ctx_printf((ctx), Error_L, (fmt), __VA_ARGS__)
+#define ctx_warn(ctx, fmt, ...) iio_ctx_printf((ctx), Warning_L, (fmt), __VA_ARGS__)
+#define ctx_info(ctx, fmt, ...) iio_ctx_printf((ctx), Info_L, (fmt), __VA_ARGS__)
+#define ctx_dbg(ctx, fmt, ...) iio_ctx_printf((ctx), Debug_L, (fmt), __VA_ARGS__)
+
+#define dev_err(dev, fmt, ...) ctx_err(iio_device_get_context(dev), fmt, __VA_ARGS__)
+#define dev_warn(dev, fmt, ...) ctx_warn(iio_device_get_context(dev), fmt, __VA_ARGS__)
+#define dev_info(dev, fmt, ...) ctx_info(iio_device_get_context(dev), fmt, __VA_ARGS__)
+#define dev_dbg(dev, fmt, ...) ctx_dbg(iio_device_get_context(dev), fmt, __VA_ARGS__)
+
+#define chn_err(chn, fmt, ...) dev_err(iio_channel_get_device(dev), fmt, __VA_ARGS__)
+#define chn_warn(chn, fmt, ...) dev_warn(iio_channel_get_device(dev), fmt, __VA_ARGS__)
+#define chn_info(chn, fmt, ...) dev_info(iio_channel_get_device(dev), fmt, __VA_ARGS__)
+#define chn_dbg(chn, fmt, ...) dev_dbg(iio_channel_get_device(dev), fmt, __VA_ARGS__)
+
+#define buf_err(buf, fmt, ...) dev_err(iio_buffer_get_device(dev), fmt, __VA_ARGS__)
+#define buf_warn(buf, fmt, ...) dev_warn(iio_buffer_get_device(dev), fmt, __VA_ARGS__)
+#define buf_info(buf, fmt, ...) dev_info(iio_buffer_get_device(dev), fmt, __VA_ARGS__)
+#define buf_dbg(buf, fmt, ...) dev_dbg(iio_buffer_get_device(dev), fmt, __VA_ARGS__)
 
 #endif

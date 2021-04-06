@@ -201,7 +201,7 @@ IF(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 	endif()
 endif()
 
-set(LIBIIO_CFILES backend.c channel.c device.c context.c buffer.c utilities.c scan.c sort.c)
+set(LIBIIO_CFILES backend.c channel.c debug.c device.c context.c buffer.c utilities.c scan.c sort.c)
 set(LIBIIO_HEADERS iio.h)
 
 if(WITH_USB_BACKEND)
