@@ -68,6 +68,8 @@ struct iio_device_pdata {
 	struct iiod_client_io *client_io;
 };
 
+static const struct iiod_client_ops network_iiod_client_ops;
+
 static struct iio_context *
 network_create_context(const struct iio_context_params *params,
 		       const char *host);
@@ -273,7 +275,6 @@ static int network_open(const struct iio_device *dev,
 	const struct iio_context *ctx = iio_device_get_context(dev);
 	struct iio_context_pdata *pdata = iio_context_get_pdata(ctx);
 	struct iio_device_pdata *ppdata = iio_device_get_pdata(dev);
-	struct iiod_client *client = ppdata->iiod_client;
 	unsigned int timeout_ms;
 	int ret = -EBUSY;
 
@@ -283,15 +284,13 @@ static int network_open(const struct iio_device *dev,
 	 */
 	timeout_ms = pdata->io_ctx.params->timeout_ms;
 
-	iiod_client_mutex_lock(client);
-
 	if (ppdata->io_ctx.fd >= 0)
-		goto out_mutex_unlock;
+		return -EBUSY;
 
 	ret = create_socket(pdata->addrinfo, timeout_ms);
 	if (ret < 0) {
 		dev_perror(dev, -ret, "Unable to create socket");
-		goto out_mutex_unlock;
+		return ret;
 	}
 
 	ppdata->io_ctx.fd = ret;
@@ -299,32 +298,39 @@ static int network_open(const struct iio_device *dev,
 	ppdata->io_ctx.cancellable = false;
 	ppdata->io_ctx.timeout_ms = timeout_ms;
 
-	ppdata->client_io = iiod_client_open_unlocked(client, dev,
+	ppdata->iiod_client = iiod_client_new(pdata->io_ctx.params,
+					      &ppdata->io_ctx,
+					      &network_iiod_client_ops);
+	if (!ppdata->iiod_client) {
+		ret = -ENOMEM;
+		goto err_close_socket;
+	}
+
+	ppdata->client_io = iiod_client_open_unlocked(ppdata->iiod_client, dev,
 						      samples_count, cyclic);
 	if (IS_ERR(ppdata->client_io)) {
 		ret = PTR_ERR(ppdata->client_io);
 		dev_perror(dev, -ret, "Unable to open device");
-		goto err_close_socket;
+		goto err_free_iiod_client;
 	}
 
 	ret = setup_cancel(&ppdata->io_ctx);
 	if (ret < 0)
-		goto err_close_socket;
+		goto err_free_iiod_client;
 
 	set_socket_timeout(ppdata->io_ctx.fd, pdata->io_ctx.timeout_ms);
 
 	ppdata->io_ctx.timeout_ms = pdata->io_ctx.timeout_ms;
 	ppdata->io_ctx.cancellable = true;
 
-	iiod_client_mutex_unlock(client);
-
 	return 0;
 
+err_free_iiod_client:
+	iiod_client_destroy(ppdata->iiod_client);
+	ppdata->iiod_client = NULL;
 err_close_socket:
 	close(ppdata->io_ctx.fd);
 	ppdata->io_ctx.fd = -1;
-out_mutex_unlock:
-	iiod_client_mutex_unlock(client);
 	return ret;
 }
 
@@ -333,6 +339,9 @@ static int network_close(const struct iio_device *dev)
 	struct iio_device_pdata *pdata = iio_device_get_pdata(dev);
 	struct iiod_client *client = pdata->iiod_client;
 	int ret = -EBADF;
+
+	if (!client)
+		return -EBADF;
 
 	iiod_client_mutex_lock(client);
 
@@ -739,17 +748,18 @@ static struct iio_context * network_create_context(const struct iio_context_para
 	if (!description)
 		goto err_free_pdata;
 
+	pdata->addrinfo = res;
+	pdata->io_ctx.fd = fd;
+	pdata->io_ctx.params = params;
+	pdata->io_ctx.timeout_ms = params->timeout_ms;
+	pdata->io_ctx.ctx_pdata = pdata;
+
 	iiod_client = iiod_client_new(params, &pdata->io_ctx,
 				      &network_iiod_client_ops);
 	if (!iiod_client)
 		goto err_free_description;
 
 	pdata->iiod_client = iiod_client;
-	pdata->addrinfo = res;
-	pdata->io_ctx.fd = fd;
-	pdata->io_ctx.params = params;
-	pdata->io_ctx.timeout_ms = params->timeout_ms;
-	pdata->io_ctx.ctx_pdata = pdata;
 
 	pdata->msg_trunc_supported = msg_trunc_supported(&pdata->io_ctx);
 	if (pdata->msg_trunc_supported)
@@ -796,13 +806,6 @@ static struct iio_context * network_create_context(const struct iio_context_para
 		ppdata->io_ctx.timeout_ms = params->timeout_ms;
 		ppdata->io_ctx.params = params;
 		ppdata->io_ctx.ctx_pdata = pdata;
-
-		ppdata->iiod_client = iiod_client_new(params, &ppdata->io_ctx,
-						      &network_iiod_client_ops);
-		if (!ppdata->iiod_client) {
-			ret = -ENOMEM;
-			goto err_network_shutdown;
-		}
 	}
 
 	iiod_client_set_timeout(pdata->iiod_client,
