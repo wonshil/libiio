@@ -1427,6 +1427,7 @@ local_create_buffer(const struct iio_device *dev, unsigned int idx,
 		return iio_ptr(-ENOMEM);
 
 	pdata->dev = dev;
+	pdata->is_tx = iio_device_is_tx(dev);
 
 	if (WITH_LOCAL_MMAP_API) {
 		pdata->pdata = local_alloc_mmap_buffer_impl();

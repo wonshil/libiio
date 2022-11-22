@@ -195,6 +195,11 @@ int local_enqueue_mmap_block(struct iio_block_pdata *pdata,
 		priv->block.flags |= BLOCK_FLAG_CYCLIC;
 	}
 
+	if (!buf->is_tx && bytes_used != priv->block.size) {
+		/* MMAP interface only supports bytes_used on TX */
+		return -EINVAL;
+	}
+
 	mask = atomic_fetch_or(&buf->pdata->mmap_enqueued_blocks_mask, BIT(priv->idx));
 	if (mask & BIT(priv->idx)) {
 		/* Already enqueued */

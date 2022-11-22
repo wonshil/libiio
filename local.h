@@ -25,6 +25,7 @@ struct iio_buffer_pdata {
 	bool multi_buffer;
 	bool dmabuf_supported;
 	bool mmap_supported;
+	bool is_tx;
 	size_t size;
 };
 
