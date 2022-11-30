@@ -206,10 +206,12 @@ int local_enqueue_dmabuf(struct iio_block_pdata *pdata,
 	if (cyclic)
 		dmabuf.flags |= IIO_DMABUF_FLAG_CYCLIC;
 
-	/* Disable CPU access to last block */
-	ret = enable_cpu_access(pdata, false);
-	if (ret)
-		return ret;
+	if (!pdata->cpu_access_disabled) {
+		/* Disable CPU access to last block */
+		ret = enable_cpu_access(pdata, false);
+		if (ret)
+			return ret;
+	}
 
 	ret = ioctl_nointr(pdata->buf->fd, IIO_DMABUF_ENQUEUE_IOCTL, &dmabuf);
 	if (ret)
@@ -238,12 +240,29 @@ int local_dequeue_dmabuf(struct iio_block_pdata *pdata, bool nonblock)
 	if (ret < 0)
 		return ret;
 
-	/* Enable CPU access to new block */
-	ret = enable_cpu_access(pdata, true);
-	if (ret < 0)
-		return ret;
+	if (!pdata->cpu_access_disabled) {
+		/* Enable CPU access to new block */
+		ret = enable_cpu_access(pdata, true);
+		if (ret < 0)
+			return ret;
+	}
 
 	pdata->dequeued = true;
+
+	return 0;
+}
+
+int local_dmabuf_disable_cpu_access(struct iio_block_pdata *pdata, bool disable)
+{
+	int ret;
+
+	if (pdata->dequeued) {
+		ret = enable_cpu_access(pdata, !disable);
+		if (ret)
+			return ret;
+	}
+
+	pdata->cpu_access_disabled = disable;
 
 	return 0;
 }
